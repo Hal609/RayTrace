@@ -80,13 +80,13 @@ float viewWidth = 1;
 float viewHeight = 1;
 float viewZ = 1;
 
-struct vec3 camPos = {0,-0.3,0.2};
+struct vec3 camPosGlo = {0,-0.3,0.2};
+struct vec3 camStep = {0.005, 0.01, 0.005};
 
 SDL_Window* window;
 SDL_Renderer* renderer;
-SDL_Renderer* renderer2;
 
-int putPixel(int x, int y, Uint32 col){
+void putPixel(int x, int y, Uint32 col){
         x = width/2 + x;
         y = height/2 - y;
 
@@ -94,15 +94,12 @@ int putPixel(int x, int y, Uint32 col){
         SDL_RenderDrawPoint(renderer, x, y);
 }
 
-int init(){
-        if (SDL_Init(SDL_INIT_VIDEO) < 0){
-                return 1;
-        }
+
+void init(){
 
         window = SDL_CreateWindow("Hal_Raytrace",
                         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                        width * scale, height * scale,
-                        SDL_WINDOW_VULKAN);
+                        width * scale, height * scale, SDL_WINDOW_RESIZABLE);
 
         Uint32 renderFlags = SDL_RENDERER_ACCELERATED;
 
@@ -145,7 +142,7 @@ float lenVec(struct vec3 a){
         return sqrt(dotProd(a,a));
 }
 
-float solveRaySphere(struct vec3 viewPPos, struct sphere sphere){
+float solveRaySphere(struct vec3 viewPPos, struct sphere sphere, struct vec3 camPos){
         float r = sphere.radius;
         struct vec3 centre = subVect(camPos, sphere.centre);
 
@@ -196,14 +193,14 @@ float compLight(struct vec3 intersect, struct vec3 normal, struct vec3 viewPPos,
         return intTotal;
 }
 
-Uint32 traceRay(struct vec3 viewPPos){
+Uint32 traceRay(struct vec3 viewPPos, struct vec3 camPos){
         float closeHit = INFINITY;
         struct sphere closestSphere;
         Uint32 backgroundCol = 0x4A515B;
         closestSphere.radius = 0;
 
         for (int i = 0; i < (sizeof(spheres)/sizeof(spheres[0])); i++){
-                float sol1, sol2 = solveRaySphere(viewPPos, spheres[i]);
+                float sol1, sol2 = solveRaySphere(viewPPos, spheres[i], camPos);
                 float dMin = sqrt(dotProd(subVect(viewPPos, camPos),subVect(viewPPos, camPos)));
 
                 if (sol1 > dMin && sol1 < INFINITY && sol1 < closeHit) {
@@ -226,13 +223,14 @@ Uint32 traceRay(struct vec3 viewPPos){
 
         float lightInten = compLight(intersect, normal, viewPPos, closestSphere);
 
-        Uint16 red = (closestSphere.color & 0xff0000) >> 16;
-        Uint16 green = (closestSphere.color & 0x00ff00) >> 8;
-        Uint16 blue = closestSphere.color & 0x0000ff;
 
-        red = (Uint16)fmin(red * lightInten, 255);
-        green = (Uint16)fmin(green * lightInten, 255);
-        blue = (Uint16)fmin(blue * lightInten, 255);
+        Uint16 red      = (closestSphere.color & 0xff0000) >> 16;
+        Uint16 green    = (closestSphere.color & 0x00ff00) >> 8;
+        Uint16 blue     = closestSphere.color & 0x0000ff;
+
+        red     = (Uint16) fmin(red * lightInten, 255);
+        green   = (Uint16) fmin(green * lightInten, 255);
+        blue    = (Uint16) fmin(blue * lightInten, 255);
 
         return (red << 16) ^ (green << 8) ^ blue;
 }
@@ -242,7 +240,7 @@ void placePixels(){
                 for (int ix = -width/2; ix <= width/2; ix += 1){
                         
                         struct vec3 viewPPos = viewportCoord(ix,iy);
-                        Uint32 col = traceRay(viewPPos);
+                        Uint32 col = traceRay(viewPPos, camPosGlo);
  
                         putPixel(ix, iy, col);
                 }
@@ -250,7 +248,7 @@ void placePixels(){
 }
 
 
-int main(int argc, char *argv[]){
+void main(int argc, char *argv[]){
 
     init();
     
@@ -260,10 +258,6 @@ int main(int argc, char *argv[]){
 
     unsigned int lastTicks = SDL_GetTicks();
 
-    unsigned int color = 0x00ff00;
-    Uint16 green = (color & 0x00ff00) >> 8;
-    printf("green: %#08x\n", green);
-
     while (!quit) {
 
         while (SDL_PollEvent(&event)) {
@@ -271,21 +265,19 @@ int main(int argc, char *argv[]){
                 quit = true;
             }
         }
-        // printf("%i\n",(SDL_GetTicks() - lastTicks));
+
+        printf("%i\n",(SDL_GetTicks() - lastTicks));
         lastTicks = SDL_GetTicks();
         
-        // SDL_RenderClear(renderer);
+        SDL_RenderClear(renderer);
         placePixels();
         SDL_RenderPresent(renderer);
         
-
-        camPos.y += 0.01;
-        camPos.x += 0.005;
-        camPos.z += 0.005;
+        
+        camPosGlo = addVect(camPosGlo, multVec(1, camStep));
         // viewZ -= 0.1;
         
     }
-
 
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
