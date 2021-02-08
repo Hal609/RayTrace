@@ -28,19 +28,19 @@ struct sphere spheres[] = {
                                         1, //radius
                                         {-2, 0, 4}, // centre coords
                                         0x14DC00, // colour
-                                        500 // specular exponent (shininess) // colour
+                                        500 // specular exponent (shininess)
                                 },
                                 {
                                         1, //radius
                                         {2, 0, 4}, // centre coords
                                         0x0000ff, // colour
-                                        10 // specular exponent (shininess) // colour
+                                        10 // specular exponent (shininess)
                                 },
                                 {
                                         50000, //radius
                                         {0, -50001, 0}, // centre coords
                                         0xffff00, // colour
-                                        100 // specular exponent (shininess) // colour
+                                        100 // specular exponent (shininess)
                                 }
                            };
 
@@ -81,26 +81,36 @@ float viewHeight = 1;
 float viewZ = 1;
 
 SDL_Window* window;
-SDL_Window* window2;
 SDL_Renderer* renderer;
 SDL_Texture* frame1;
 SDL_Texture* frame2;
 
-SDL_Point points[4000000];
-Uint32 colours[4000000];
+SDL_Point points[21000000];
+Uint32 colours[21000000];
 
 int pointsLen = 0;
 
+SDL_Point points2[4000000];
+Uint32 colours2[4000000];
 
-void putPixel(int x, int y, Uint32 col){
+int pointsLen2 = 0;
+
+
+void putPixel(int x, int y, Uint32 col, int frame){
         x = width/2 + x;
         y = height/2 - y;
 
-    
+        
         SDL_Point newPoint = {x, y};
-        points[pointsLen] = newPoint;
-        colours[pointsLen] = col;
-        pointsLen += 1;
+        if (frame == 1){
+                points[pointsLen] = newPoint;
+                colours[pointsLen] = col;
+                pointsLen += 1;
+        } else {
+                points2[pointsLen2] = newPoint;
+                colours2[pointsLen2] = col;
+                pointsLen2 += 1;
+        }
 
 
         // SDL_SetRenderDrawColor(renderer, ((col & 0xff0000) >> 16 ), ((col & 0x00ff00) >> 8 ), (col & 0x0000ff), 255);
@@ -248,35 +258,41 @@ Uint32 traceRay(struct vec3 viewPPos, struct vec3 camPos){
         return (red << 16) ^ (green << 8) ^ blue;
 }
 
-void placePixels(struct vec3 camPos){
+void placePixels(struct vec3 camPos, int frame){
         for (int iy = height/2; iy >= -height/2; iy-=1){
                 for (int ix = -width/2; ix <= width/2; ix += 1){
                         
                         struct vec3 viewPPos = viewportCoord(ix,iy);
                         Uint32 col = traceRay(viewPPos, camPos);
                         
-                        putPixel(ix, iy, col);
+                        putPixel(ix, iy, col, frame);
                 }
         }
 }
 
 void *renderTex1(void *vargp) { 
-    SDL_RenderCopy(renderer, frame1, NULL, NULL);
-    SDL_RenderPresent(renderer);
-    return NULL;
+        for (int i = 0; i <= pointsLen; i++){
+                SDL_SetRenderDrawColor(renderer, ((colours[i] & 0xff0000) >> 16 ), ((colours[i] & 0x00ff00) >> 8 ), (colours[i] & 0x0000ff), 255);
+                SDL_RenderDrawPoint(renderer, points[i].x, points[i].y);
+        }
+         SDL_RenderPresent(renderer);
+        return NULL;
 }
 
 void *renderTex2(void *vargp) { 
-    SDL_RenderCopy(renderer, frame2, NULL, NULL);
-    SDL_RenderPresent(renderer);
-    return NULL;
+        for (int i = 0; i <= pointsLen2; i++){
+                SDL_SetRenderDrawColor(renderer, ((colours2[i] & 0xff0000) >> 16 ), ((colours2[i] & 0x00ff00) >> 8 ), (colours2[i] & 0x0000ff), 255);
+                SDL_RenderDrawPoint(renderer, points2[i].x, points2[i].y);
+        }
+         SDL_RenderPresent(renderer);
+        return NULL;
 }
 
 int main(int argc, char *argv[]){
 
     init();
     
-    typedef enum { false, true } bool;
+    typedef enum {false, true} bool;
     bool quit = false;
     SDL_Event event;
 
@@ -286,11 +302,8 @@ int main(int argc, char *argv[]){
     struct vec3 camStep = {0.005, 0.01, 0.005};
 
     pthread_t thread_id1;
-    pthread_t thread_id2;
 
     int count = 0;
-
-    SDL_SetRenderTarget(renderer, frame1);
 
     while (!quit) {
         count++;
@@ -301,36 +314,23 @@ int main(int argc, char *argv[]){
             }
         }
 
-        
-
         if (count % 2 == 0){
                 pthread_create(&thread_id1, NULL, renderTex1, NULL);
-                placePixels(camPos);
+                camPos = addVect(camPos, multVec(1, camStep));
+                pointsLen2 = 0;
+                placePixels(camPos, 2);
                 pthread_join(thread_id1, NULL);
-                for (int i = 0; i <= pointsLen; i++){
-                        SDL_SetRenderDrawColor(renderer, ((colours[i] & 0xff0000) >> 16 ), ((colours[i] & 0x00ff00) >> 8 ), (colours[i] & 0x0000ff), 255);
-                        SDL_RenderDrawPoint(renderer, points[i].x, points[i].y);
-                }
-        } else{
-                pthread_create(&thread_id1, NULL, renderTex1, NULL); 
-                placePixels(camPos);
-                pthread_join(thread_id1, NULL);
-                for (int i = 0; i <= pointsLen; i++){
-                        SDL_SetRenderDrawColor(renderer, ((colours[i] & 0xff0000) >> 16 ), ((colours[i] & 0x00ff00) >> 8 ), (colours[i] & 0x0000ff), 255);
-                        SDL_RenderDrawPoint(renderer, points[i].x, points[i].y);
-                }
         }
-
-        
-        // pthread_join(thread_id2, NULL);
-        pointsLen = 0;
+        else {
+                pthread_create(&thread_id1, NULL, renderTex2, NULL);
+                camPos = addVect(camPos, multVec(1, camStep));
+                pointsLen = 0;
+                placePixels(camPos, 1);
+                pthread_join(thread_id1, NULL);
+        }
 
         printf("%i\n",(SDL_GetTicks() - lastTicks));
         lastTicks = SDL_GetTicks();
-
-        
-        camPos = addVect(camPos, multVec(1, camStep));
-        // viewZ -= 0.1;
     }
 
     SDL_DestroyRenderer(renderer);
