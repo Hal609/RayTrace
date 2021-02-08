@@ -81,17 +81,30 @@ float viewHeight = 1;
 float viewZ = 1;
 
 SDL_Window* window;
+SDL_Window* window2;
 SDL_Renderer* renderer;
 SDL_Texture* frame1;
 SDL_Texture* frame2;
+
+SDL_Point points[4000000];
+Uint32 colours[4000000];
+
+int pointsLen = 0;
+
 
 void putPixel(int x, int y, Uint32 col){
         x = width/2 + x;
         y = height/2 - y;
 
+    
+        SDL_Point newPoint = {x, y};
+        points[pointsLen] = newPoint;
+        colours[pointsLen] = col;
+        pointsLen += 1;
 
-        SDL_SetRenderDrawColor(renderer, ((col & 0xff0000) >> 16 ), ((col & 0x00ff00) >> 8 ), (col & 0x0000ff), 255);
-        SDL_RenderDrawPoint(renderer, x, y);
+
+        // SDL_SetRenderDrawColor(renderer, ((col & 0xff0000) >> 16 ), ((col & 0x00ff00) >> 8 ), (col & 0x0000ff), 255);
+        // SDL_RenderDrawPoint(renderer, x, y);
 }
 
 
@@ -241,7 +254,7 @@ void placePixels(struct vec3 camPos){
                         
                         struct vec3 viewPPos = viewportCoord(ix,iy);
                         Uint32 col = traceRay(viewPPos, camPos);
- 
+                        
                         putPixel(ix, iy, col);
                 }
         }
@@ -253,13 +266,13 @@ void *renderTex1(void *vargp) {
     return NULL;
 }
 
-// void *renderTex2(void *vargp) { 
-//     SDL_RenderCopy(renderer, frame2, NULL, NULL);
-//     SDL_RenderPresent(renderer);
-//     return NULL; 
-// }
+void *renderTex2(void *vargp) { 
+    SDL_RenderCopy(renderer, frame2, NULL, NULL);
+    SDL_RenderPresent(renderer);
+    return NULL;
+}
 
-void main(int argc, char *argv[]){
+int main(int argc, char *argv[]){
 
     init();
     
@@ -273,10 +286,11 @@ void main(int argc, char *argv[]){
     struct vec3 camStep = {0.005, 0.01, 0.005};
 
     pthread_t thread_id1;
-    SDL_SetRenderTarget(renderer, frame1);
-//     pthread_t thread_id2;
+    pthread_t thread_id2;
 
     int count = 0;
+
+    SDL_SetRenderTarget(renderer, frame1);
 
     while (!quit) {
         count++;
@@ -287,36 +301,29 @@ void main(int argc, char *argv[]){
             }
         }
 
-        // if (count == 0){
-        //         printf("here");
-        //         SDL_SetRenderTarget(renderer, frame1);
-        //         SDL_RenderClear(renderer);
-        //         pthread_create(&thread_id1, NULL, renderTex1, NULL); 
-        //         pthread_join(thread_id1, NULL);
-        //         SDL_SetRenderTarget(renderer, frame2);
-        //         placePixels(camPos);
-        // } else {
-        //         if (count % 2 == 0){
-        //                 pthread_join(thread_id2, NULL);
-        //                 pthread_create(&thread_id1, NULL, renderTex1, NULL);
-        //                 SDL_SetRenderTarget(renderer, frame2);
-        //                 placePixels(camPos);
-        //         } else if (count % 2 != 0) {
-        //                 pthread_join(thread_id1, NULL);
-        //                 pthread_create(&thread_id2, NULL, renderTex2, NULL); 
-        //                 SDL_SetRenderTarget(renderer, frame1);
-        //                 placePixels(camPos);
-        //         }
-        // }
-        pthread_create(&thread_id1, NULL, renderTex1, NULL); 
+        
+
         if (count % 2 == 0){
-                SDL_SetRenderTarget(renderer, frame1);
+                pthread_create(&thread_id1, NULL, renderTex1, NULL);
+                placePixels(camPos);
+                pthread_join(thread_id1, NULL);
+                for (int i = 0; i <= pointsLen; i++){
+                        SDL_SetRenderDrawColor(renderer, ((colours[i] & 0xff0000) >> 16 ), ((colours[i] & 0x00ff00) >> 8 ), (colours[i] & 0x0000ff), 255);
+                        SDL_RenderDrawPoint(renderer, points[i].x, points[i].y);
+                }
         } else{
-                SDL_SetRenderTarget(renderer, frame2);
+                pthread_create(&thread_id1, NULL, renderTex1, NULL); 
+                placePixels(camPos);
+                pthread_join(thread_id1, NULL);
+                for (int i = 0; i <= pointsLen; i++){
+                        SDL_SetRenderDrawColor(renderer, ((colours[i] & 0xff0000) >> 16 ), ((colours[i] & 0x00ff00) >> 8 ), (colours[i] & 0x0000ff), 255);
+                        SDL_RenderDrawPoint(renderer, points[i].x, points[i].y);
+                }
         }
-        SDL_SetRenderTarget(renderer, frame1);
-        placePixels(camPos);
-        pthread_join(thread_id1, NULL);
+
+        
+        // pthread_join(thread_id2, NULL);
+        pointsLen = 0;
 
         printf("%i\n",(SDL_GetTicks() - lastTicks));
         lastTicks = SDL_GetTicks();
