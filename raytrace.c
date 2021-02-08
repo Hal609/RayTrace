@@ -17,6 +17,13 @@ struct sphere{
         int specExp;
 };
 
+struct light{
+        char style;
+        float intensity;
+        struct vec3 direction;
+        struct vec3 position;
+};
+
 struct sphere spheres[] = {
                                 {
                                         1, //radius
@@ -44,12 +51,6 @@ struct sphere spheres[] = {
                                 }
                            };
 
-struct light{
-        char style;
-        float intensity;
-        struct vec3 direction;
-        struct vec3 position;
-};
 
 struct light lights[] = {
                                 {
@@ -72,74 +73,30 @@ struct light lights[] = {
                                 },
                            };
 
-float width = 600 * 1/1; // resolution * aspect
-float height = 600;
-int scale = 1;
 
-float viewWidth = 1;
+float height = 400;
+int scale = 1.5;
+
+float ratio = 1.3; //1.778 = 16/9
+
 float viewHeight = 1;
-float viewZ = 1;
+float viewZ = 0.9;
 
 SDL_Window* window;
 SDL_Renderer* renderer;
-SDL_Texture* frame1;
-SDL_Texture* frame2;
 
 SDL_Point points[21000000];
 Uint32 colours[21000000];
 
-int pointsLen = 0;
-
 SDL_Point points2[4000000];
 Uint32 colours2[4000000];
 
+int pointsLen = 0;
 int pointsLen2 = 0;
 
+struct vec3 camPos = {0,0,0};
 
-void putPixel(int x, int y, Uint32 col, int frame){
-        x = width/2 + x;
-        y = height/2 - y;
-
-        
-        SDL_Point newPoint = {x, y};
-        if (frame == 1){
-                points[pointsLen] = newPoint;
-                colours[pointsLen] = col;
-                pointsLen += 1;
-        } else {
-                points2[pointsLen2] = newPoint;
-                colours2[pointsLen2] = col;
-                pointsLen2 += 1;
-        }
-
-
-        // SDL_SetRenderDrawColor(renderer, ((col & 0xff0000) >> 16 ), ((col & 0x00ff00) >> 8 ), (col & 0x0000ff), 255);
-        // SDL_RenderDrawPoint(renderer, x, y);
-}
-
-
-void init(){
-
-        window = SDL_CreateWindow("Hal_Raytrace",
-                        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                        width * scale, height * scale, SDL_WINDOW_RESIZABLE);
-
-        Uint32 renderFlags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC;
-
-        renderer = SDL_CreateRenderer(window, -1, renderFlags);
-
-        SDL_RenderSetScale(renderer, scale, scale);
-}
-
-struct vec3 viewportCoord(int x, int y){
-        struct vec3 viewpos;
-        viewpos.x = x * viewWidth/width;
-        viewpos.y = y * viewHeight/height;
-        viewpos.z = viewZ;
-
-        return viewpos;
-}
-
+//======= VECTOR FUNCTIONS========
 
 struct vec3 addVect(struct vec3 a, struct vec3 b){
         struct vec3 result = {a.x + b.x, a.y + b.y, a.z + b.z};
@@ -165,12 +122,41 @@ float lenVec(struct vec3 a){
         return sqrt(dotProd(a,a));
 }
 
-float solveRaySphere(struct vec3 viewPPos, struct sphere sphere, struct vec3 camPos){
+
+void init(){
+        window = SDL_CreateWindow("Hal_Raytrace",
+                                  SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, // Window position
+                                  height*ratio * scale, height * scale,  // Window size (x,y)
+                                  SDL_WINDOW_RESIZABLE); // Window flags
+
+        Uint32 renderFlags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC;
+
+        renderer = SDL_CreateRenderer(window, -1, renderFlags); // Create renderer
+
+        SDL_RenderSetScale(renderer, scale, scale);
+}
+
+struct vec3 viewportCoord(int x, int y){
+        // Translates pixel coordinates to viewport coordinates
+
+        struct vec3 viewpos;
+        viewpos.x = x * viewHeight/height;
+        viewpos.y = y * viewHeight/height;
+        viewpos.z = viewZ;
+
+        return viewpos;
+}
+
+float solveRaySphere(struct vec3 vectToView, struct sphere sphere){
+        /* Takes coords on viewport, a sphere and the camera position.
+        Calculates if the ray from camera to viewport position intersects with sphere using quadratic formula
+         Returns the distances along the ray that it intersects the sphere. */
+
         float r = sphere.radius;
         struct vec3 centre = subVect(camPos, sphere.centre);
 
-        float a = dotProd(viewPPos, viewPPos);
-        float b = 2* dotProd(centre, viewPPos);
+        float a = dotProd(vectToView, vectToView);
+        float b = 2* dotProd(centre, vectToView);
         float c = dotProd(centre, centre) - r*r;
 
         float discr = b*b - 4*a*c;
@@ -185,46 +171,57 @@ float solveRaySphere(struct vec3 viewPPos, struct sphere sphere, struct vec3 cam
         return sol1, sol2;
 }
 
-float compLight(struct vec3 intersect, struct vec3 normal, struct vec3 viewPPos, struct sphere closeSphere){
-        float intTotal = 0.0;
-        float dotRes;
-        struct vec3 dirResult;
+float compLight(struct vec3 intersect, struct vec3 normal, struct vec3 vectToView, struct sphere closeSphere){
+        /* Computes the total light intensity at the point the ray met the sphere (intersect)
+        Takes the normal to the sphere, the position on the viewport (vector from origin to viewport)
+        and the struct of the sphere which was hit (to get its specular exponant).*/ 
+
+        float intTotal = 0.0; // Total light intensity
+        float dotRes;  // Result of the dot product
+        struct vec3 directionResult;  // Calculated (or given) direction of the ray
+        float sol1 = 0;
+        float sol2 = 0;
 
         for (int i = 0; i < (sizeof(lights)/sizeof(lights[0])); i++){
-
+                sol1 = 0;
+                sol2 = 0;
                 if (lights[i].style == 'a'){
                         intTotal += lights[i].intensity;
                 } else {
                         if (lights[i].style == 'd'){
-                                dirResult = lights[i].direction;
+                                directionResult = lights[i].direction;
                         } else if (lights[i].style == 'p'){
-                                dirResult = subVect(lights[i].position, intersect);
+                                directionResult = subVect(lights[i].position, intersect);
                         }
-
-                        dotRes = dotProd(dirResult, normal);
                         
-                        if (dotRes > 0){
-                                struct vec3 refRay = subVect(multVec(2*dotProd(normal, dirResult),normal),dirResult);
-                                struct vec3 viewRay = subVect(intersect, viewPPos);
-                                float shine = pow(dotProd(refRay, viewRay)/(lenVec(refRay)*lenVec(viewRay)), closeSphere.specExp);
+                        // Calc shadow
 
-                                intTotal += lights[i].intensity * dotRes/(lenVec(dirResult)*lenVec(normal)); // Diffuse Light
-                                intTotal += lights[i].intensity * shine; // Specular light
+                        if (sol2 < INFINITY && sol1 < INFINITY){
+                                dotRes = dotProd(directionResult, normal);
+                                
+                                if (dotRes > 0){
+                                        struct vec3 refRay = subVect(multVec(2*dotProd(normal, directionResult),normal),directionResult);
+                                        struct vec3 viewRay = subVect(intersect, vectToView);
+                                        float shine = pow(dotProd(refRay, viewRay)/(lenVec(refRay)*lenVec(viewRay)), closeSphere.specExp);
+
+                                        intTotal += lights[i].intensity * dotRes/(lenVec(directionResult)*lenVec(normal)); // Diffuse Light
+                                        intTotal += lights[i].intensity * shine; // Specular light
+                                }
                         }
                 }
         }
         return intTotal;
 }
 
-Uint32 traceRay(struct vec3 viewPPos, struct vec3 camPos){
+Uint32 traceRay(struct vec3 vectToView){
         float closeHit = INFINITY;
         struct sphere closestSphere;
         Uint32 backgroundCol = 0x4A515B;
         closestSphere.radius = 0;
 
         for (int i = 0; i < (sizeof(spheres)/sizeof(spheres[0])); i++){
-                float sol1, sol2 = solveRaySphere(viewPPos, spheres[i], camPos);
-                float dMin = sqrt(dotProd(subVect(viewPPos, camPos),subVect(viewPPos, camPos)));
+                float sol1, sol2 = solveRaySphere(vectToView, spheres[i]);
+                float dMin = sqrt(dotProd(subVect(vectToView, camPos),subVect(vectToView, camPos)));
 
                 if (sol1 > dMin && sol1 < INFINITY && sol1 < closeHit) {
                         closeHit = sol1;
@@ -239,12 +236,12 @@ Uint32 traceRay(struct vec3 viewPPos, struct vec3 camPos){
                 return backgroundCol;
         }
 
-        struct vec3 intersect = addVect(camPos, multVec(closeHit, viewPPos));
+        struct vec3 intersect = addVect(camPos, multVec(closeHit, vectToView));
 
         struct vec3 normal = subVect(intersect, closestSphere.centre);
         normal = multVec((1/lenVec(normal)), normal);
 
-        float lightInten = compLight(intersect, normal, viewPPos, closestSphere);
+        float lightInten = compLight(intersect, normal, vectToView, closestSphere);
 
 
         Uint16 red      = (closestSphere.color & 0xff0000) >> 16;
@@ -258,17 +255,34 @@ Uint32 traceRay(struct vec3 viewPPos, struct vec3 camPos){
         return (red << 16) ^ (green << 8) ^ blue;
 }
 
+
 void placePixels(struct vec3 camPos, int frame){
+        int x;
+        int y;
+
         for (int iy = height/2; iy >= -height/2; iy-=1){
-                for (int ix = -width/2; ix <= width/2; ix += 1){
+                for (int ix = -(height * ratio)/2; ix <= (height *ratio)/2; ix += 1){
                         
-                        struct vec3 viewPPos = viewportCoord(ix,iy);
-                        Uint32 col = traceRay(viewPPos, camPos);
+                        struct vec3 vectToView = viewportCoord(ix,iy);
+                        Uint32 col = traceRay(vectToView);
                         
-                        putPixel(ix, iy, col, frame);
+                        x = (height * ratio)/2 + ix;
+                        y = height/2 - iy;
+                        
+                        SDL_Point newPoint = {x, y};
+                        if (frame == 1){
+                                points[pointsLen] = newPoint;
+                                colours[pointsLen] = col;
+                                pointsLen += 1;
+                        } else {
+                                points2[pointsLen2] = newPoint;
+                                colours2[pointsLen2] = col;
+                                pointsLen2 += 1;
+                        }
                 }
         }
 }
+
 
 void *renderTex1(void *vargp) { 
         for (int i = 0; i <= pointsLen; i++){
@@ -288,6 +302,7 @@ void *renderTex2(void *vargp) {
         return NULL;
 }
 
+
 int main(int argc, char *argv[]){
 
     init();
@@ -298,8 +313,8 @@ int main(int argc, char *argv[]){
 
     unsigned int lastTicks = SDL_GetTicks();
 
-    struct vec3 camPos = {0,-0.3,0.2};
-    struct vec3 camStep = {0.005, 0.01, 0.005};
+    struct vec3 camStep = {0.005, 0.005, 0.01};
+//     struct vec3 camStep = {0.00, 0.00, 0.0};     
 
     pthread_t thread_id1;
 
@@ -316,14 +331,14 @@ int main(int argc, char *argv[]){
 
         if (count % 2 == 0){
                 pthread_create(&thread_id1, NULL, renderTex1, NULL);
-                camPos = addVect(camPos, multVec(1, camStep));
+                camPos = addVect(camPos, camStep);
                 pointsLen2 = 0;
                 placePixels(camPos, 2);
                 pthread_join(thread_id1, NULL);
         }
         else {
                 pthread_create(&thread_id1, NULL, renderTex2, NULL);
-                camPos = addVect(camPos, multVec(1, camStep));
+                camPos = addVect(camPos, camStep);
                 pointsLen = 0;
                 placePixels(camPos, 1);
                 pthread_join(thread_id1, NULL);
