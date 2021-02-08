@@ -80,15 +80,15 @@ float viewWidth = 1;
 float viewHeight = 1;
 float viewZ = 1;
 
-struct vec3 camPosGlo = {0,-0.3,0.2};
-struct vec3 camStep = {0.005, 0.01, 0.005};
-
 SDL_Window* window;
 SDL_Renderer* renderer;
+SDL_Texture* frame1;
+SDL_Texture* frame2;
 
 void putPixel(int x, int y, Uint32 col){
         x = width/2 + x;
         y = height/2 - y;
+
 
         SDL_SetRenderDrawColor(renderer, ((col & 0xff0000) >> 16 ), ((col & 0x00ff00) >> 8 ), (col & 0x0000ff), 255);
         SDL_RenderDrawPoint(renderer, x, y);
@@ -101,7 +101,7 @@ void init(){
                         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                         width * scale, height * scale, SDL_WINDOW_RESIZABLE);
 
-        Uint32 renderFlags = SDL_RENDERER_ACCELERATED;
+        Uint32 renderFlags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC;
 
         renderer = SDL_CreateRenderer(window, -1, renderFlags);
 
@@ -235,18 +235,29 @@ Uint32 traceRay(struct vec3 viewPPos, struct vec3 camPos){
         return (red << 16) ^ (green << 8) ^ blue;
 }
 
-void placePixels(){
+void placePixels(struct vec3 camPos){
         for (int iy = height/2; iy >= -height/2; iy-=1){
                 for (int ix = -width/2; ix <= width/2; ix += 1){
                         
                         struct vec3 viewPPos = viewportCoord(ix,iy);
-                        Uint32 col = traceRay(viewPPos, camPosGlo);
+                        Uint32 col = traceRay(viewPPos, camPos);
  
                         putPixel(ix, iy, col);
                 }
         }
 }
 
+void *renderTex1(void *vargp) { 
+    SDL_RenderCopy(renderer, frame1, NULL, NULL);
+    SDL_RenderPresent(renderer);
+    return NULL;
+}
+
+// void *renderTex2(void *vargp) { 
+//     SDL_RenderCopy(renderer, frame2, NULL, NULL);
+//     SDL_RenderPresent(renderer);
+//     return NULL; 
+// }
 
 void main(int argc, char *argv[]){
 
@@ -258,7 +269,17 @@ void main(int argc, char *argv[]){
 
     unsigned int lastTicks = SDL_GetTicks();
 
+    struct vec3 camPos = {0,-0.3,0.2};
+    struct vec3 camStep = {0.005, 0.01, 0.005};
+
+    pthread_t thread_id1;
+    SDL_SetRenderTarget(renderer, frame1);
+//     pthread_t thread_id2;
+
+    int count = 0;
+
     while (!quit) {
+        count++;
 
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
@@ -266,17 +287,43 @@ void main(int argc, char *argv[]){
             }
         }
 
+        // if (count == 0){
+        //         printf("here");
+        //         SDL_SetRenderTarget(renderer, frame1);
+        //         SDL_RenderClear(renderer);
+        //         pthread_create(&thread_id1, NULL, renderTex1, NULL); 
+        //         pthread_join(thread_id1, NULL);
+        //         SDL_SetRenderTarget(renderer, frame2);
+        //         placePixels(camPos);
+        // } else {
+        //         if (count % 2 == 0){
+        //                 pthread_join(thread_id2, NULL);
+        //                 pthread_create(&thread_id1, NULL, renderTex1, NULL);
+        //                 SDL_SetRenderTarget(renderer, frame2);
+        //                 placePixels(camPos);
+        //         } else if (count % 2 != 0) {
+        //                 pthread_join(thread_id1, NULL);
+        //                 pthread_create(&thread_id2, NULL, renderTex2, NULL); 
+        //                 SDL_SetRenderTarget(renderer, frame1);
+        //                 placePixels(camPos);
+        //         }
+        // }
+        pthread_create(&thread_id1, NULL, renderTex1, NULL); 
+        if (count % 2 == 0){
+                SDL_SetRenderTarget(renderer, frame1);
+        } else{
+                SDL_SetRenderTarget(renderer, frame2);
+        }
+        SDL_SetRenderTarget(renderer, frame1);
+        placePixels(camPos);
+        pthread_join(thread_id1, NULL);
+
         printf("%i\n",(SDL_GetTicks() - lastTicks));
         lastTicks = SDL_GetTicks();
+
         
-        SDL_RenderClear(renderer);
-        placePixels();
-        SDL_RenderPresent(renderer);
-        
-        
-        camPosGlo = addVect(camPosGlo, multVec(1, camStep));
+        camPos = addVect(camPos, multVec(1, camStep));
         // viewZ -= 0.1;
-        
     }
 
     SDL_DestroyRenderer(renderer);
