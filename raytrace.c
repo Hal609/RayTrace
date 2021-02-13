@@ -15,6 +15,7 @@ struct sphere{
         struct vec3 centre;
         Uint32 color;
         int specExp;
+        float refelct;
 };
 
 struct light{
@@ -22,7 +23,6 @@ struct light{
         float intensity;
         struct vec3 direction;
         struct vec3 position;
-        float refelct;
 };
 
 struct sphere spheres[] = {
@@ -38,20 +38,20 @@ struct sphere spheres[] = {
                                         {-2, 0, 4}, // centre coords
                                         0x14DC00, // colour
                                         500, // specular exponent (shininess)
-                                        0.3 // Reflectiveness
+                                        0.2 // Reflectiveness
                                 },
                                 {
                                         1, //radius
                                         {2, 0, 4}, // centre coords
                                         0x0000ff, // colour
                                         500, // specular exponent (shininess)
-                                        0.4 // Reflectiveness
+                                        0.1 // Reflectiveness
                                 },
                                 {
                                         5000, //radius
                                         {0, -5001, 0}, // centre coords
                                         0xffff00, // colour
-                                        0, // specular exponent (shininess)
+                                        1000, // specular exponent (shininess)
                                         0.5 // Reflectiveness
                                 }
                            };
@@ -74,15 +74,15 @@ struct light lights[] = {
                                         'p', // type (a- ambient, d - directional, p - point)
                                         0.6, // intensity
                                         {0, 0, 0}, // direction
-                                        {2, 1, 0} // position
+                                        {2, 3, 0} // position
                                 },
                            };
 
 
-float height = 720;
+float height = 400;
 int scale = 1;
 
-float ratio = 1.2; //1.778 = 16/9
+float ratio = 1.5; //1.778 = 16/9
 
 float viewHeight = 1;
 float viewZ = 0.9;
@@ -152,11 +152,6 @@ struct vec3 viewportCoord(int x, int y){
         return viewpos;
 }
 
-struct closeInt{
-        struct sphere closetSphere;
-        float closeHit;
-};
-
 float solveRaySphere(struct vec3 vecStart, struct vec3 vecEnd, struct sphere sphere){
         /* Takes coords on viewport, a sphere and the camera position.
         Calculates if the ray from camera to viewport position intersects with sphere using quadratic formula
@@ -181,21 +176,27 @@ float solveRaySphere(struct vec3 vecStart, struct vec3 vecEnd, struct sphere sph
         return sol1, sol2;
 }
 
-struct closeInt traceRayFunc(struct vec3 home, struct vec3 hit, float lowLim, float highLim, float closeHit){
-        float sol1 = 0;
-        float sol2 = 0;
-        // float closeHit = INFINITY;
+struct closeInt{
+        struct sphere closetSphere;
+        float closeHit;
+};
+
+struct closeInt closeIntFunc(struct vec3 home, struct vec3 hit, float lowLim, float highLim1, float highLim2){
+        float sol1;
+        float sol2;
         struct sphere closeSphere2;
+        float closeHit = INFINITY;
+
         closeSphere2.radius = 0;
 
         for (int i = 0; i < (sizeof(spheres)/sizeof(spheres[0])); i++){
                 float sol1, sol2 = solveRaySphere(home, hit, spheres[i]);
 
-                if (sol1 > lowLim && sol1 < highLim && sol1 < closeHit) {
+                if (sol1 > lowLim && sol1 < highLim1 && sol1 < closeHit) {
                         closeHit = sol1;
                         closeSphere2 = spheres[i];
                 }
-                if (sol2 > lowLim && sol2 < highLim && sol2 < closeHit) {
+                if (sol2 > lowLim && sol2 < highLim2 && sol2 < closeHit) {
                         closeHit = sol2;
                         closeSphere2 = spheres[i];
                 }
@@ -203,6 +204,12 @@ struct closeInt traceRayFunc(struct vec3 home, struct vec3 hit, float lowLim, fl
         struct closeInt result = {closeSphere2, closeHit};
         return result;
 }
+
+struct vec3 reflectRay(struct vec3 inRay, struct vec3 mirrorRay){
+        inRay = multVec(-1, inRay);
+        return subVect(multVec(2*dotProd(mirrorRay, inRay),mirrorRay),inRay);
+}
+
 
 float compLight(struct vec3 intersect, struct vec3 normal, struct vec3 vectToView, struct sphere closeSphere){
         /* Computes the total light intensity at the point the ray met the sphere (intersect)
@@ -214,7 +221,8 @@ float compLight(struct vec3 intersect, struct vec3 normal, struct vec3 vectToVie
         struct vec3 directionResult;  // Calculated (or given) direction of the ray
         float sol1 = 0;
         float sol2 = 0;
-        float closeHit = INFINITY;
+        // float closeHit = INFINITY;
+        // float maxHit;
         float shine;
 
         for (int i = 0; i < (sizeof(lights)/sizeof(lights[0])); i++){                
@@ -223,113 +231,105 @@ float compLight(struct vec3 intersect, struct vec3 normal, struct vec3 vectToVie
                 } else {
                         if (lights[i].style == 'd'){
                                 directionResult = subVect(lights[i].direction, intersect);
-                                closeHit = 0.1;
+                                // closeHit = 0.1;
+                                // maxHit = 1;
                         } else if (lights[i].style == 'p'){
                                 directionResult = subVect(lights[i].position, intersect);
-                                // printf("x: %f  y: %f  z: %f\n", directionResult.x, directionResult.y, directionResult.z);
-                                closeHit = 1;
+                                // closeHit = 1;
+                                // maxHit = INFINITY;
                         }
                         
                         // Calc shadow
-
-                        // struct closeInt cloCalc = traceRayFunc(intersect, directionResult, 0.0001, INFINITY);
-                        // closeSphere2 = cloCalc.closetSphere;
-                        // closeHit = cloCalc.closeHit;
-
-                        struct vec3 home;
-                        struct vec3 hit;
-                        home = intersect;
-                        hit = directionResult;
-                        float lowLim = 0.0001;
-                        float highLim = INFINITY;
-
-                        sol1 = 0;
-                        sol2 = 0;
-                        struct sphere closeSphere2;
-                        closeSphere2.radius = 0;
-
-                        for (int i = 0; i < (sizeof(spheres)/sizeof(spheres[0])); i++){
-                                float sol1, sol2 = solveRaySphere(home, hit, spheres[i]);
-
-                                if (sol1 > lowLim && sol1 < highLim && sol1 < closeHit) {
-                                        closeHit = sol1;
-                                        closeSphere2 = spheres[i];
-                                }
-                                if (sol2 > lowLim && sol2 < highLim && sol2 < closeHit) {
-                                        closeHit = sol2;
-                                        closeSphere2 = spheres[i];
-                                }
-                        }
-                        // struct closeInt cloCalc = traceRayFunc(home, hit, lowLim, highLim, closeHit);;
-                        
-                        // closeSphere2 = cloCalc.closetSphere;
-                        // closeHit = cloCalc.closeHit;
-
-                        // printf("%f\n", closeSphere2.radius);
-                        if (closeSphere2.radius != 0){
+                        struct closeInt cloCalc = closeIntFunc(intersect, directionResult, 0.000001, 0, 1);
+                        if (cloCalc.closetSphere.radius != 0){
                                 continue;
                         }
 
                         dotRes = dotProd(directionResult, normal);
-                        
-                        if (dotRes > 0){
-                                struct vec3 refRay = subVect(multVec(2*dotProd(normal, directionResult),normal),directionResult);
-                                struct vec3 viewRay = subVect(intersect, vectToView);
-                                
-                                
-                                shine = pow(dotProd(refRay, viewRay)/(lenVec(refRay)*lenVec(viewRay)), closeSphere.specExp);
-
-                                intTotal += lights[i].intensity * dotRes/(lenVec(directionResult)*lenVec(normal)); // Diffuse Light
-
-                                if (closeSphere.specExp > 0){
-                                        intTotal += lights[i].intensity * shine; // Specular light
-                                }
+                        if (dotRes <= 0){
+                                continue;
                         }
+
+                        // Diffuse Light
+                        intTotal += lights[i].intensity * dotRes/(lenVec(directionResult)*lenVec(normal)); 
+
+                        // Specular light
+                        struct vec3 refRay = reflectRay(directionResult, normal);
+                        struct vec3 viewRay = subVect(intersect, vectToView);
+                        
+                        if (closeSphere.specExp > 0){
+                                shine = pow(dotProd(refRay, viewRay)/(lenVec(refRay)*lenVec(viewRay)), closeSphere.specExp);
+                                intTotal += lights[i].intensity * shine; 
+                        }
+                        
                 }
         }
         return intTotal;
 }
 
-Uint32 traceRay(struct vec3 vectToView){
+Uint32 multiplyCol(Uint32 inputCol, float factor){
+        Uint16 red      = (inputCol & 0xff0000) >> 16;
+        Uint16 green    = (inputCol & 0x00ff00) >> 8;
+        Uint16 blue     = inputCol & 0x0000ff;
+
+        red     = fmin(red * factor, 255);
+        green   = fmin(green * factor, 255);
+        blue    = fmin(blue * factor, 255);
+
+        return (red << 16) ^ (green << 8) ^ blue;
+}
+
+Uint32 addCol(Uint32 col1, Uint32 col2){
+        Uint16 red1      = (col1 & 0xff0000) >> 16;
+        Uint16 green1    = (col1 & 0x00ff00) >> 8;
+        Uint16 blue1     = col1 & 0x0000ff;
+
+        Uint16 red2      = (col2 & 0xff0000) >> 16;
+        Uint16 green2    = (col2 & 0x00ff00) >> 8;
+        Uint16 blue2     = col2 & 0x0000ff;
+
+        Uint16 red     = fmin(red1 + red2, 255);
+        Uint16 green   = fmin(green1 + green2, 255);
+        Uint16 blue    = fmin(blue1 + blue2, 255);
+
+        return (red << 16) ^ (green << 8) ^ blue;
+}
+
+Uint32 traceRay(struct vec3 rayOrigin, struct vec3 vectToView, float lowLim, float highLim, int depth){
         float closeHit = INFINITY;
-        struct sphere closestSphere;
-        Uint32 backgroundCol = 0x4A515B;
-        closestSphere.radius = 0;
+        Uint32 backgroundCol = 0x354951;
 
-        for (int i = 0; i < (sizeof(spheres)/sizeof(spheres[0])); i++){
-                float sol1, sol2 = solveRaySphere(camPos ,vectToView, spheres[i]);
-                float dMin = sqrt(dotProd(subVect(vectToView, camPos),subVect(vectToView, camPos)));
+        struct vec3 blank = {0,0,0};
+        subVect(blank, blank); // Does literally nothing but the program breaks without it... ¯\_(ツ)_/¯
+        
+        struct closeInt cloCalc = closeIntFunc(rayOrigin, vectToView, lowLim, highLim, highLim);
+        closeHit = cloCalc.closeHit;
 
-                if (sol1 > dMin && sol1 < INFINITY && sol1 < closeHit) {
-                        closeHit = sol1;
-                        closestSphere = spheres[i];
-                }
-                if (sol2 > dMin && sol2 < INFINITY && sol2 < closeHit) {
-                        closeHit = sol2;
-                        closestSphere = spheres[i];
-                }
-        }
-        if (closestSphere.radius == 0) {
+        if (cloCalc.closetSphere.radius == 0) {
                 return backgroundCol;
         }
 
-        struct vec3 intersect = addVect(camPos, multVec(closeHit, vectToView));
+        struct vec3 intersect = addVect(rayOrigin, multVec(closeHit, vectToView));
 
-        struct vec3 normal = subVect(intersect, closestSphere.centre);
+        struct vec3 normal = subVect(intersect, cloCalc.closetSphere.centre);
         normal = multVec((1/lenVec(normal)), normal);
 
-        float lightInten = compLight(intersect, normal, multVec(-1, vectToView), closestSphere);
+        float lightInten = compLight(intersect, normal, vectToView, cloCalc.closetSphere);
 
+        Uint32 finCol = multiplyCol(cloCalc.closetSphere.color, lightInten);
 
-        Uint16 red      = (closestSphere.color & 0xff0000) >> 16;
-        Uint16 green    = (closestSphere.color & 0x00ff00) >> 8;
-        Uint16 blue     = closestSphere.color & 0x0000ff;
+        float reflect = cloCalc.closetSphere.refelct;
 
-        red     = (Uint16) fmin(red * lightInten, 255);
-        green   = (Uint16) fmin(green * lightInten, 255);
-        blue    = (Uint16) fmin(blue * lightInten, 255);
+        if (depth <= 0 || reflect <= 0){
+                return finCol;
+        }
+        
+        //Reflection
+        struct vec3 bounceRay = reflectRay(vectToView, normal);
+        Uint32 reflectCol = traceRay(intersect, bounceRay, 0.001, INFINITY, depth - 1);
 
-        return (red << 16) ^ (green << 8) ^ blue;
+        return addCol(multiplyCol(finCol, 1 - reflect), multiplyCol(reflectCol, reflect));
+
 }
 
 
@@ -341,7 +341,8 @@ void placePixels(struct vec3 camPos, int frame){
                 for (int ix = -(height * ratio)/2; ix <= (height *ratio)/2; ix += 1){
                         
                         struct vec3 vectToView = viewportCoord(ix,iy);
-                        Uint32 col = traceRay(vectToView);
+                        float dMin = sqrt(dotProd(subVect(vectToView, camPos),subVect(vectToView, camPos)));
+                        Uint32 col = traceRay(camPos, vectToView, dMin, INFINITY, 3);
                         
                         x = (height * ratio)/2 + ix;
                         y = height/2 - iy;
@@ -420,6 +421,15 @@ int main(int argc, char *argv[]){
                 placePixels(camPos, 1);
                 pthread_join(thread_id1, NULL);
         }
+
+        spheres[1].centre.x += 0.002;
+        spheres[1].centre.y += 0.01;
+        spheres[1].centre.z += 0.01;
+
+        spheres[2].centre.x -= 0.02;
+        spheres[2].centre.y += 0.012; 
+
+        spheres[0].centre.z += 0.008;
 
         printf("%i\n",(SDL_GetTicks() - lastTicks));
         lastTicks = SDL_GetTicks();
