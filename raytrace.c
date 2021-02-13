@@ -129,6 +129,7 @@ float lenVec(struct vec3 a){
 
 
 void init(){
+        /* Creates window and renderer of corrent size */
         window = SDL_CreateWindow("Hal_Raytrace",
                                   SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, // Window position
                                   height*ratio * scale, height * scale,  // Window size (x,y)
@@ -176,12 +177,12 @@ float solveRaySphere(struct vec3 vecStart, struct vec3 vecEnd, struct sphere sph
         return sol1, sol2;
 }
 
-struct closeInt{
+struct closeInt{ // Structure to store result of closest intersection calculation
         struct sphere closetSphere;
         float closeHit;
 };
 
-struct closeInt closeIntFunc(struct vec3 home, struct vec3 hit, float lowLim, float highLim1, float highLim2){
+struct closeInt closeIntFunc(struct vec3 home, struct vec3 hit, float lowLim, float highLim){
         float sol1;
         float sol2;
         struct sphere closeSphere2;
@@ -192,11 +193,11 @@ struct closeInt closeIntFunc(struct vec3 home, struct vec3 hit, float lowLim, fl
         for (int i = 0; i < (sizeof(spheres)/sizeof(spheres[0])); i++){
                 float sol1, sol2 = solveRaySphere(home, hit, spheres[i]);
 
-                if (sol1 > lowLim && sol1 < highLim1 && sol1 < closeHit) {
+                if (sol1 > lowLim && sol1 < highLim && sol1 < closeHit) {
                         closeHit = sol1;
                         closeSphere2 = spheres[i];
                 }
-                if (sol2 > lowLim && sol2 < highLim2 && sol2 < closeHit) {
+                if (sol2 > lowLim && sol2 < highLim && sol2 < closeHit) {
                         closeHit = sol2;
                         closeSphere2 = spheres[i];
                 }
@@ -240,7 +241,7 @@ float compLight(struct vec3 intersect, struct vec3 normal, struct vec3 vectToVie
                         }
                         
                         // Calc shadow
-                        struct closeInt cloCalc = closeIntFunc(intersect, directionResult, 0.000001, 0, 1);
+                        struct closeInt cloCalc = closeIntFunc(intersect, directionResult, 0.000001, 1);
                         if (cloCalc.closetSphere.radius != 0){
                                 continue;
                         }
@@ -302,7 +303,7 @@ Uint32 traceRay(struct vec3 rayOrigin, struct vec3 vectToView, float lowLim, flo
         struct vec3 blank = {0,0,0};
         subVect(blank, blank); // Does literally nothing but the program breaks without it... ¯\_(ツ)_/¯
         
-        struct closeInt cloCalc = closeIntFunc(rayOrigin, vectToView, lowLim, highLim, highLim);
+        struct closeInt cloCalc = closeIntFunc(rayOrigin, vectToView, lowLim, highLim);
         closeHit = cloCalc.closeHit;
 
         if (cloCalc.closetSphere.radius == 0) {
@@ -334,6 +335,7 @@ Uint32 traceRay(struct vec3 rayOrigin, struct vec3 vectToView, float lowLim, flo
 
 
 void placePixels(struct vec3 camPos, int frame){
+        /* Calculates and stores the required colour values for each pixel*/
         int x;
         int y;
 
@@ -341,6 +343,7 @@ void placePixels(struct vec3 camPos, int frame){
                 for (int ix = -(height * ratio)/2; ix <= (height *ratio)/2; ix += 1){
                         
                         struct vec3 vectToView = viewportCoord(ix,iy);
+                        
                         float dMin = sqrt(dotProd(subVect(vectToView, camPos),subVect(vectToView, camPos)));
                         Uint32 col = traceRay(camPos, vectToView, dMin, INFINITY, 3);
                         
@@ -348,6 +351,7 @@ void placePixels(struct vec3 camPos, int frame){
                         y = height/2 - iy;
                         
                         SDL_Point newPoint = {x, y};
+
                         if (frame == 1){
                                 points[pointsLen] = newPoint;
                                 colours[pointsLen] = col;
@@ -362,21 +366,21 @@ void placePixels(struct vec3 camPos, int frame){
 }
 
 
-void *renderTex1(void *vargp) { 
+void *renderTex1(void *vargp) { // Draws pixel colours to renderer
         for (int i = 0; i <= pointsLen; i++){
                 SDL_SetRenderDrawColor(renderer, ((colours[i] & 0xff0000) >> 16 ), ((colours[i] & 0x00ff00) >> 8 ), (colours[i] & 0x0000ff), 255);
                 SDL_RenderDrawPoint(renderer, points[i].x, points[i].y);
         }
-         SDL_RenderPresent(renderer);
+        SDL_RenderPresent(renderer);
         return NULL;
 }
 
-void *renderTex2(void *vargp) { 
+void *renderTex2(void *vargp) { // Draws pixel colours to renderer
         for (int i = 0; i <= pointsLen2; i++){
                 SDL_SetRenderDrawColor(renderer, ((colours2[i] & 0xff0000) >> 16 ), ((colours2[i] & 0x00ff00) >> 8 ), (colours2[i] & 0x0000ff), 255);
                 SDL_RenderDrawPoint(renderer, points2[i].x, points2[i].y);
         }
-         SDL_RenderPresent(renderer);
+        SDL_RenderPresent(renderer);
         return NULL;
 }
 
@@ -391,8 +395,7 @@ int main(int argc, char *argv[]){
 
     unsigned int lastTicks = SDL_GetTicks();
 
-    struct vec3 camStep = {0.005, 0.005, 0.01};
-//     struct vec3 camStep = {0.00, 0.00, 0.0};     
+    struct vec3 camStep = {0.005, 0.005, 0.01};   
 
     pthread_t thread_id1;
 
