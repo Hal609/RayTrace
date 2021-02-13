@@ -28,31 +28,73 @@ struct light{
 struct sphere spheres[] = {
                                 {
                                         1, //radius
-                                        {0, -1, 3}, // centre coords
+                                        {2, 1, 4}, // centre coords
                                         0xff0000, // colour
                                         500, // specular exponent (shininess)
                                         0.2 // Reflectiveness
                                 },
                                 {
-                                        1, //radius
-                                        {-2, 0, 4}, // centre coords
+                                        0.4, //radius
+                                        {0, 0.4, 3}, // centre coords
+                                        0xffffff, // colour
+                                        500, // specular exponent (shininess)
+                                        0.2 // Reflectiveness
+                                },
+                                {
+                                        0.3, //radius
+                                        {-0.7, 0.3, 5.5}, // centre coords
                                         0x14DC00, // colour
                                         500, // specular exponent (shininess)
                                         0.2 // Reflectiveness
                                 },
                                 {
-                                        1, //radius
-                                        {2, 0, 4}, // centre coords
+                                        0.9, //radius
+                                        {-2, 0.9, 7}, // centre coords
+                                        0xba05fc, // colour
+                                        500, // specular exponent (shininess)
+                                        0.2 // Reflectiveness
+                                },
+                                {
+                                        0.7, //radius
+                                        {-1.5, 0.7, 3}, // centre coords
                                         0x0000ff, // colour
                                         500, // specular exponent (shininess)
-                                        0.1 // Reflectiveness
+                                        0.2 // Reflectiveness
+                                },
+                                {
+                                        0.35, //radius
+                                        {-1.3, 0.35, 4.5}, // centre coords
+                                        0xff0000, // colour
+                                        500, // specular exponent (shininess)
+                                        0.2 // Reflectiveness
+                                },
+                                {
+                                        0.3, //radius
+                                        {1, 0.3, 3.3}, // centre coords
+                                        0xba05fc, // colour
+                                        500, // specular exponent (shininess)
+                                        0.2 // Reflectiveness
+                                },
+                                {
+                                        0.32, //radius
+                                        {2.7, 0.32, 3}, // centre coords
+                                        0x00ff00, // colour
+                                        500, // specular exponent (shininess)
+                                        0.2 // Reflectiveness
+                                },
+                                {
+                                        0.8, //radius
+                                        {1.2, 0.8, 7}, // centre coords
+                                        0x0000ff, // colour
+                                        1000, // specular exponent (shininess)
+                                        0.2 // Reflectiveness
                                 },
                                 {
                                         5000, //radius
-                                        {0, -5001, 0}, // centre coords
-                                        0xffff00, // colour
+                                        {0, -5000, 0}, // centre coords
+                                        0xffffee, // colour
                                         1000, // specular exponent (shininess)
-                                        0.5 // Reflectiveness
+                                        0.6 // Reflectiveness
                                 }
                            };
 
@@ -79,10 +121,10 @@ struct light lights[] = {
                            };
 
 
-float height = 400;
+float height = 720;
 int scale = 1;
 
-float ratio = 1.5; //1.778 = 16/9
+float ratio = 1.778; //1.778 = 16/9
 
 float viewHeight = 1;
 float viewZ = 0.9;
@@ -99,7 +141,7 @@ Uint32 colours2[4000000];
 int pointsLen = 0;
 int pointsLen2 = 0;
 
-struct vec3 camPos = {0,0,0};
+struct vec3 camPos = {0,1,0};
 
 //======= VECTOR FUNCTIONS========
 
@@ -298,7 +340,7 @@ Uint32 addCol(Uint32 col1, Uint32 col2){
 
 Uint32 traceRay(struct vec3 rayOrigin, struct vec3 vectToView, float lowLim, float highLim, int depth){
         float closeHit = INFINITY;
-        Uint32 backgroundCol = 0x354951;
+        Uint32 backgroundCol = 0x111111;
 
         struct vec3 blank = {0,0,0};
         subVect(blank, blank); // Does literally nothing but the program breaks without it... ¯\_(ツ)_/¯
@@ -425,14 +467,14 @@ int main(int argc, char *argv[]){
                 pthread_join(thread_id1, NULL);
         }
 
-        spheres[1].centre.x += 0.002;
-        spheres[1].centre.y += 0.01;
-        spheres[1].centre.z += 0.01;
+        // spheres[1].centre.x += 0.002;
+        // spheres[1].centre.y += 0.01;
+        // spheres[1].centre.z += 0.01;
 
-        spheres[2].centre.x -= 0.02;
-        spheres[2].centre.y += 0.012; 
+        // spheres[2].centre.x -= 0.02;
+        // spheres[2].centre.y += 0.012; 
 
-        spheres[0].centre.z += 0.008;
+        // spheres[0].centre.z += 0.008;
 
         printf("%i\n",(SDL_GetTicks() - lastTicks));
         lastTicks = SDL_GetTicks();
