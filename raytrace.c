@@ -92,9 +92,9 @@ struct sphere spheres[] = {
                                 {
                                         5000, //radius
                                         {0, -5000, 0}, // centre coords
-                                        0xffffee, // colour
-                                        1000, // specular exponent (shininess)
-                                        0.6 // Reflectiveness
+                                        0xeeeedd, // colour
+                                        500, // specular exponent (shininess)
+                                        0.3 // Reflectiveness
                                 }
                            };
 
@@ -116,18 +116,20 @@ struct light lights[] = {
                                         'p', // type (a- ambient, d - directional, p - point)
                                         0.6, // intensity
                                         {0, 0, 0}, // direction
-                                        {2, 3, 0} // position
+                                        {-2, 5, 0} // position
                                 },
                            };
 
 
-float height = 720;
-int scale = 1;
+float height = 200;
+int scale = 3;
 
-float ratio = 1.778; //1.778 = 16/9
+float ratio = 1.2; //1.778 = 16/9
 
 float viewHeight = 1;
 float viewZ = 0.9;
+
+int renderToFile = 0;
 
 SDL_Window* window;
 SDL_Renderer* renderer;
@@ -274,12 +276,8 @@ float compLight(struct vec3 intersect, struct vec3 normal, struct vec3 vectToVie
                 } else {
                         if (lights[i].style == 'd'){
                                 directionResult = subVect(lights[i].direction, intersect);
-                                // closeHit = 0.1;
-                                // maxHit = 1;
                         } else if (lights[i].style == 'p'){
                                 directionResult = subVect(lights[i].position, intersect);
-                                // closeHit = 1;
-                                // maxHit = INFINITY;
                         }
                         
                         // Calc shadow
@@ -407,6 +405,17 @@ void placePixels(struct vec3 camPos, int frame){
         }
 }
 
+void save_texture(const char* file_name, SDL_Renderer* renderer, SDL_Texture* texture) {
+    SDL_Texture* target = SDL_GetRenderTarget(renderer);
+    SDL_SetRenderTarget(renderer, texture);
+    int width, height;
+    SDL_QueryTexture(texture, NULL, NULL, &width, &height);
+    SDL_Surface* surface = SDL_CreateRGBSurface(0, width, height, 32, 0, 0, 0, 0);
+    SDL_RenderReadPixels(renderer, NULL, surface->format->format, surface->pixels, surface->pitch);
+    SDL_SaveBMP(surface, file_name);
+    SDL_FreeSurface(surface);
+    SDL_SetRenderTarget(renderer, target);
+}
 
 void *renderTex1(void *vargp) { // Draws pixel colours to renderer
         for (int i = 0; i <= pointsLen; i++){
@@ -429,55 +438,84 @@ void *renderTex2(void *vargp) { // Draws pixel colours to renderer
 
 int main(int argc, char *argv[]){
 
-    init();
-    
-    typedef enum {false, true} bool;
-    bool quit = false;
-    SDL_Event event;
+        init();
 
-    unsigned int lastTicks = SDL_GetTicks();
+        typedef enum {false, true} bool;
+        bool quit = false;
+        SDL_Event event;
 
-    struct vec3 camStep = {0.005, 0.005, 0.01};   
+        unsigned int lastTicks = SDL_GetTicks();
 
-    pthread_t thread_id1;
+        struct vec3 camStep = {0.005, 0.005, 0.01};   
 
-    int count = 0;
+        pthread_t thread_id1;
 
-    while (!quit) {
-        count++;
+        int count = 0;
 
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
-                quit = true;
-            }
+        SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR888, SDL_TEXTUREACCESS_TARGET, height*ratio, height);
+        if (renderToFile){
+                SDL_SetRenderTarget(renderer, texture);
         }
 
-        if (count % 2 == 0){
-                pthread_create(&thread_id1, NULL, renderTex1, NULL);
-                camPos = addVect(camPos, camStep);
-                pointsLen2 = 0;
-                placePixels(camPos, 2);
-                pthread_join(thread_id1, NULL);
-        }
-        else {
-                pthread_create(&thread_id1, NULL, renderTex2, NULL);
-                camPos = addVect(camPos, camStep);
-                pointsLen = 0;
-                placePixels(camPos, 1);
-                pthread_join(thread_id1, NULL);
-        }
+        while (!quit) {
 
-        // spheres[1].centre.x += 0.002;
-        // spheres[1].centre.y += 0.01;
-        // spheres[1].centre.z += 0.01;
+                while (SDL_PollEvent(&event)) {
+                        if (event.type == SDL_QUIT) {
+                                quit = true;
+                        }
+                }
 
-        // spheres[2].centre.x -= 0.02;
-        // spheres[2].centre.y += 0.012; 
 
-        // spheres[0].centre.z += 0.008;
+                if (renderToFile){
+                        camPos = addVect(camPos, camStep);
+                        pointsLen = 0;
+                        placePixels(camPos, 1);
+                        for (int i = 0; i <= pointsLen; i++){
+                                SDL_SetRenderDrawColor(renderer, ((colours[i] & 0xff0000) >> 16 ), ((colours[i] & 0x00ff00) >> 8 ), (colours[i] & 0x0000ff), 255);
+                                SDL_RenderDrawPoint(renderer, points[i].x, points[i].y);
+                        }
+                } else {
+                        if (count % 2 == 0){
+                                pthread_create(&thread_id1, NULL, renderTex1, NULL);
+                                camPos = addVect(camPos, camStep);
+                                pointsLen2 = 0;
+                                placePixels(camPos, 2);
+                                pthread_join(thread_id1, NULL);
+                        }
+                        else {
+                                pthread_create(&thread_id1, NULL, renderTex2, NULL);
+                                camPos = addVect(camPos, camStep);
+                                pointsLen = 0;
+                                placePixels(camPos, 1);
+                                pthread_join(thread_id1, NULL);
+                }
+                }
+                
+                // spheres[1].centre.x += 0.002;
+                // spheres[1].centre.y += 0.01;
+                // spheres[1].centre.z += 0.01;
 
-        printf("%i\n",(SDL_GetTicks() - lastTicks));
-        lastTicks = SDL_GetTicks();
+                // spheres[2].centre.x -= 0.02;
+                // spheres[2].centre.y += 0.012; 
+
+                // spheres[0].centre.z += 0.008;
+
+                printf("%i  - %i\n",(SDL_GetTicks() - lastTicks),count);
+                lastTicks = SDL_GetTicks();
+
+                if (renderToFile){
+                        char str[80];
+                        if (count < 10){
+                                sprintf(str, "img-00%i.bmp", count);
+                        } else if (count < 100){
+                                sprintf(str, "img-0%i.bmp", count);
+                        } else {
+                                sprintf(str, "img-%i.bmp", count);
+                        }
+                        save_texture(str, renderer, texture);
+                }
+                
+                count++;
     }
 
     SDL_DestroyRenderer(renderer);
