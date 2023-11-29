@@ -112,6 +112,67 @@ struct vec3 viewportCoord(int x, int y) {
     };
 }
 
+#include <pthread.h>
+
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+struct ThreadData {
+    int startX, endX, startY, endY;
+    struct vec3 camPos;
+    int frame;
+};
+
+void* placePixelsThreaded(void* arg) {
+    struct ThreadData* data = (struct ThreadData*)arg;
+
+    for (int iy = data->startY; iy >= data->endY; iy--) {
+        for (int ix = data->startX; ix <= data->endX; ix++) {
+            struct vec3 vectToView = viewportCoord(ix, iy);
+
+            Uint32 col = traceRay(data->camPos, vectToView, 0.001, INFINITY, 3);
+
+            int x = (height * ratio) / 2 + ix;
+            int y = height / 2 - iy;
+
+            SDL_Point newPoint = {x, y};
+
+            pthread_mutex_lock(&mutex);
+            points[pointsLen] = newPoint;
+            colours[pointsLen] = col;
+            pointsLen += 1;
+            pthread_mutex_unlock(&mutex);
+        }
+    }
+
+    return NULL;
+}
+
+void placePixels(struct vec3 camPos, int frame) {
+    int quarterHeight = height / 4;
+    int quarterWidth = (height * ratio) / 4;
+
+    struct ThreadData data[16];
+    pthread_t threads[16];
+
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            data[i * 4 + j] = (struct ThreadData){
+                .startX = -quarterWidth * (2 - j),
+                .endX = -quarterWidth * (1 - j),
+                .startY = quarterHeight * (2 - i),
+                .endY = quarterHeight * (1 - i),
+                .camPos = camPos,
+                .frame = frame
+            };
+            pthread_create(&threads[i * 4 + j], NULL, placePixelsThreaded, &data[i * 4 + j]);
+        }
+    }
+
+    for (int i = 0; i < 16; i++) {
+        pthread_join(threads[i], NULL);
+    }
+}
+
 // Function to solve for ray-sphere intersection using the quadratic formula
 struct solutions solveRaySphere(const struct vec3 vecStart, const struct vec3 vecEnd, const struct sphere sphere) {
     struct solutions sol = {INFINITY, INFINITY};
@@ -157,8 +218,6 @@ struct closeInt closeIntFunc(struct vec3 home, struct vec3 hit, float lowLim, fl
 
     return result;
 }
-
-
 
 // Computes the total light intensity at a point
 float compLight(struct vec3 intersect, struct vec3 normal, struct vec3 vectToView, struct sphere closeSphere) {
@@ -227,26 +286,4 @@ Uint32 traceRay(struct vec3 rayOrigin, struct vec3 vectToView, float lowLim, flo
     return addCol(multiplyCol(finCol, 1 - reflect), multiplyCol(reflectCol, reflect));
 }
 
-// Calculates and stores the required colour values for each pixel
-void placePixels(struct vec3 camPos, int frame) {
-    int halfHeight = height / 2;
-    int halfWidth = (height * ratio) / 2;  // Assuming 'ratio' is width/height
-
-    for (int iy = halfHeight; iy >= -halfHeight; iy--) {
-        for (int ix = -halfWidth; ix <= halfWidth; ix++) {
-            struct vec3 vectToView = viewportCoord(ix, iy);
-
-            Uint32 col = traceRay(camPos, vectToView, 0.001, INFINITY, 3);  // Assuming a fixed dMin is not required
-
-            int x = halfWidth + ix;
-            int y = halfHeight - iy;
-
-            SDL_Point newPoint = {x, y};
-
-            points[pointsLen] = newPoint;
-            colours[pointsLen] = col;
-            pointsLen += 1;
-        }
-    }
-}
 
