@@ -1,0 +1,30 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "C/C++: gcc build raytrace file",
+            "command": "/usr/bin/gcc",
+            "args": [
+                "-g",
+                "${workspaceFolder}/source/main.c",
+                "${workspaceFolder}/source/sdl_setup.c",
+                "${workspaceFolder}/source/render_utils.c",
+                "${workspaceFolder}/source/render.c",
+                "${workspaceFolder}/source/vector.c",
+                "-o",
+                "${workspaceFolder}/source/main",
+                "-lSDL2",
+                "-lm",
+                "-lpthread"
+            ],
+            "options": {
+                "cwd": "/usr/bin"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": "build"
+        }
+    ]
+}

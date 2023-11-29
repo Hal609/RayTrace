@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "cstddef": "c",
+        "config.h": "c",
+        "float.h": "c",
+        "vector.h": "c",
+        "structures.h": "c",
+        "sdl_setup.h": "c"
+    }
+}
